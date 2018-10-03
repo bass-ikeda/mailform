@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta http-equiv="Content-Script-Type"  content="text/javascript">
+    <meta http-equiv="Content-Style-Type" content="text/css">
+    <meta name="description" content="入力フォーム">
+    <meta name="keywords" content="入力フォーム">
+    <title>入力フォーム</title>
+	
+<!--
+include jQuery UI Theme (=Style Sheet), jQuery and jQuery UI.
+see: https://code.jquery.com/
+-->
+ <!-- jQuery UI Themes -->
+ <link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/smoothness/jquery-ui.css">
+ <!-- jQuery -->
+ <script
+  src="https://code.jquery.com/jquery-3.3.1.slim.min.js"
+  integrity="sha256-3edrmyuQ0w65f8gfBsqowzjJe2iM6n0nKciPUp8y+7E="
+  crossorigin="anonymous"></script>
+ <!-- jQuery UI -->
+<!--
+ <script
+  src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"
+  integrity="sha256-VazP97ZCwtekAsvgPBSUwPFKdrwD3unUfSGVYrahUqU="
+  crossorigin="anonymous"></script>
+-->
+<!-- marked: Markdown parser, hosted on cdnjs / https://cdnjs.com -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/0.5.0/marked.min.js"></script>
+<!-- ToDo: use securemark; https://github.com/falsandtru/securemark -->
+
+<!--
+    <link rel="stylesheet" href="CSS.css">
+-->
+<style>
+.yet {
+	background-color: yellow;
+}
+
+div#area-input {
+	float: left;
+	width: 49%;
+}
+div#area-view {
+	float: left;
+	width: 49%;
+}
+div#area-operation {
+	clear: both;
+}
+
+div#area-input textarea#mailbody {
+	width: 99%;
+	height: 100%;
+}
+</style>
+</head>
+<body>
+<!--
+<form action="" method="POST">
+</form>
+-->
+<h1>入力フォーム</h1>
+<p>
+入力フォームにテキストを入力し、[送信]ボタンを押す。
+</p>
+<form id="form-input" action="mail-submit.php" method="POST">
+<div id="area-input">
+<textarea id="mailbody" name="mailbody" rows="40"></textarea>
+</div>
+<script>
+function genUndoRedo(obj, maxhist)
+{
+	if(obj === undefined) { return {}; }
+
+	var gen = {
+		target : obj,
+		maxHistory : maxhist,		// 'undefined' means 'no limit'.
+
+		index : 0,
+		history : [],
+		isComposing : false,	// true: typing with IME / false : 
+
+		register: function(){
+			if(this.isComposing) { return; }
+	
+			while(0 < this.index)
+			{
+				this.history.shift();
+				this.index--;
+			}
+
+			var value = $( this.target ).val();
+			if(this.history[this.index] == value) { return; }
+			this.history.unshift(value);
+	
+			if(this.maxHistory != undefined)
+			{
+				while(this.maxHistory < this.history.length - 1)
+				{
+					this.history.pop();
+				}
+			}
+			console.log(this.index + ": " + this.history);
+		},
+		
+		undo: function(){
+			if(this.history.length -1 <= this.index) { return; } 
+			this.index += 1;
+			$( this.target ).val(this.history[this.index]);
+			viewer_sync();
+
+			console.log(this.index + ": " + this.history);
+		},
+		
+		redo: function(){
+			if(this.index <= 0) { return; } 
+			this.index -= 1;
+			this.target.val(this.history[this.index]);
+			viewer_sync();
+
+			console.log(this.index + ": " + this.history);
+		},
+		
+		type_hook: function(){}
+	};
+	
+	obj	.ready(function(){ gen.register(); gen.type_hook(); })
+		.keyup(function(){ gen.register(); gen.type_hook(); })
+		.on('compositionstart', function(){ 
+			gen.isComposing = true;
+		})
+		.on('compositionend', function(){ 
+			gen.isComposing = false;
+			gen.register();
+		});
+		
+	return gen;
+}
+
+var mb = genUndoRedo($("#mailbody"));
+</script>
+<div id="area-view">
+</div>
+<script>
+function viewer_sync()
+{
+	var text = $( "#mailbody" ).val();
+	var parsed = marked(text);
+	$( "#area-view" ).html(parsed);
+}
+
+mb.type_hook = viewer_sync;
+</script>
+
+<div id="area-operation">
+</div>
+<input id="submit" name="submit" type="submit" value="submit">
+<input id="undo" name="undo" type="button" value="undo">
+<input id="redo" name="redo" type="button" value="redo">
+<input id="resetb" name="resetb" type="reset" value="reset">
+<script>
+$( "#undo" ).click(function(){mb.undo();});
+$( "#redo" ).click(function(){mb.redo();});
+$( "#resetb" ).click(function(){$("#form-input")[0].reset();mb.register();viewer_sync();});
+</script>
+</form>
+</body>
+</html>
