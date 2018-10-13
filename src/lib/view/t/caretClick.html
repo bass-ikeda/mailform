@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta http-equiv="Content-Script-Type"  content="text/javascript">
+    <meta http-equiv="Content-Style-Type" content="text/css">
+    <meta name="description" content="入力フォーム">
+    <meta name="keywords" content="入力フォーム">
+    <title>入力フォーム</title>
+	
+<!--
+include jQuery UI Theme (=Style Sheet), jQuery and jQuery UI.
+see: https://code.jquery.com/
+-->
+ <!-- jQuery UI Themes -->
+ <link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/smoothness/jquery-ui.css">
+ <!-- jQuery -->
+ <script
+  src="https://code.jquery.com/jquery-3.3.1.slim.min.js"
+  integrity="sha256-3edrmyuQ0w65f8gfBsqowzjJe2iM6n0nKciPUp8y+7E="
+  crossorigin="anonymous"></script>
+ <!-- jQuery UI -->
+<!--
+ <script
+  src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"
+  integrity="sha256-VazP97ZCwtekAsvgPBSUwPFKdrwD3unUfSGVYrahUqU="
+  crossorigin="anonymous"></script>
+-->
+<!-- marked: Markdown parser, hosted on cdnjs / https://cdnjs.com -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/0.5.0/marked.min.js"></script>
+<!-- ToDo: use securemark; https://github.com/falsandtru/securemark -->
+
+<!--
+    <link rel="stylesheet" href="CSS.css">
+-->
+<style>
+.yet {
+	background-color: yellow;
+}
+
+body {
+}
+div#area-input {
+	float: left;
+	width: 49%;
+}
+div#area-view {
+	float: left;
+	width: 49%;
+	position: relative;
+}
+div#layer-markdown {
+	width: 100%;
+	position: absolute;
+	z-index: 1;
+	background-color: rgba(255,255,255,0);
+}
+div#layer-cursor {
+	width: 100%;
+	position: absolute;
+	z-index: 0;
+	background-color: #ffff66;
+}
+div#area-operation {
+	clear: both;
+}
+
+div#area-input textarea#mailbody {
+	width: 99%;
+	height: 100%;
+}
+
+span#cursor {
+	background-color: yellow;
+}
+</style>
+</head>
+<body>
+<!--
+<form action="" method="POST">
+</form>
+-->
+<h1>入力フォーム</h1>
+<p>
+入力フォームにテキストを入力し、[送信]ボタンを押す。
+</p>
+<form id="form-input" action="mail-submit.php" method="POST">
+<div id="area-input">
+<textarea id="mailbody" name="mailbody" rows="40">
+# aaa [bbb](c.c) ddd
+
+eee
+
+```
+fff
+```
+
+<!--
+コメント
+-->
+</textarea>
+</div>
+<script>
+(function($) {
+
+	var methods = {
+		init : function(options) {
+			// console.log('method: init');
+//			return this;
+
+			var properties = $.extend( {
+				'maxHistory'	: undefined,	// 'undefined' means 'no limit'.
+			}, options);		
+
+			return this.each(function() {
+				if(! $(this).data('history')) {
+					$(this).data('history', {
+						'index'			: 0,
+						'history'		: [],
+						'isComposing'	: false,		// true: typing with IME
+						
+						'maxHistory'	: properties.maxHistory,
+					});
+				}
+
+				var data = $(this).data('history');
+				//console.log(data.index + ": " + data.history);
+			});
+
+		},
+		register : function() {
+			// console.log('method: register');
+//			return this;
+
+			return this.each(function() {
+				var data = $(this).data('history');
+				//console.log(data);
+				if(data.isComposing) { return; }
+	
+				while(0 < data.index)
+				{
+					data.history.shift();
+					data.index--;
+				}
+
+				var value = $(this).val();
+				if(data.history[data.index] == value) { return; }
+				data.history.unshift(value);
+	
+				if(data.maxHistory != undefined)
+				{
+					while(data.maxHistory < data.history.length - 1)
+					{
+						data.history.pop();
+					}
+				}
+				
+				$(this).data('history', data); 
+				// console.log(data.index + ": " + data.history);
+			});	
+
+		},
+		undo : function() {
+			// console.log('method: undo');
+//			return this;
+
+			return this.each(function() {
+				var data = $(this).data('history');
+				//console.log(data);
+				
+				if(data.history.length -1 <= data.index) { return; } 
+				data.index += 1;
+				$(this).val(data.history[data.index]);
+
+				$(this).data('history', data); 
+				// console.log(data.index + ": " + data.history);
+			});	
+
+		},
+		redo : function() {
+			// console.log('method: redo');
+//			return this;
+
+			return this.each(function() {
+				var data = $(this).data('history');
+
+				if(data.index <= 0) { return; } 
+				data.index -= 1;
+				$(this).val(data.history[data.index]);
+
+				$(this).data('history', data); 
+				// console.log(data.index + ": " + data.history);
+			});	
+
+		},
+		compositionstart : function() {
+			return this.each(function() {
+				var data = $(this).data('history');
+				data.isComposing = true;
+				$(this).data('history', data); 
+			});
+		},
+		compositionend : function() {
+			return this.each(function() {
+				var data = $(this).data('history');
+				data.isComposing = false;
+				$(this).data('history', data); 
+			});
+		},
+	};
+
+	$.fn.history = function(method) {
+		if (methods[method]) {
+			return methods[method].apply(this, Array.prototype.slice.call(arguments, 1 ));
+		} else if (typeof method === 'object' || ! method) {
+			return methods['init'].apply(this, arguments);
+		} else {
+			$.error('Method ' +  method + ' does not exist on jQuery.history' );
+		}
+	};
+
+})( jQuery );
+
+$('#mailbody')
+	.history({
+				'maxHistory'	: 3,	// 'undefined' means 'no limit'.
+			})	// init
+	.ready(function(){ 
+		$('#mailbody').history('register'); 
+		viewer_sync();
+	})
+	.keyup(function(){
+		$('#mailbody').history('register');
+		viewer_sync();
+	})
+	.on('compositionstart', function(){ 
+		$('#mailbody').history('compositionstart');
+	})
+	.on('compositionend', function(){ 
+		$('#mailbody').history('compositionend');
+		$('#mailbody').history('register');
+	});
+</script>
+
+<div id="area-view">
+<div id="layer-markdown"></div>
+<div id="layer-cursor"></div>
+</div>
+<script>
+function viewer_sync()
+{
+	var text = $( "#mailbody" ).val();
+	var parsed = marked(text);
+	//$( "#area-view" ).html(parsed);
+	$("#layer-markdown" ).html(parsed);
+
+	// 効いていない?
+/*
+	$("layer-cursor").height($( "#layer-markdown" ).height());
+	$("layer-cursor").width($( "#layer-markdown" ).width());
+	$("layer-cursor").offset($( "#layer-markdown" ).offset());
+*/
+}
+</script>
+<script>
+// cf. [DocumentOrShadowRoot.elementFromPoint() - Web APIs | MDN](https://developer.mozilla.org/en-US/docs/Web/API/DocumentOrShadowRoot/elementFromPoint)
+// 
+// caretPositionFromPoint() という文字を対象にした関数もあるが、実験的な実装である。
+// Chrome や Opera では使えない。
+// cf. [DocumentOrShadowRoot.caretPositionFromPoint() - Web APIs | MDN](https://developer.mozilla.org/en-US/docs/Web/API/DocumentOrShadowRoot/caretPositionFromPoint#Browser_Compatibility)
+function getClickedElement(e) {
+	var element = document.elementFromPoint(e.clientX, e.clientY);
+	return element;
+} 
+</script>
+<script>
+$( "#area-view" ).click(function(e){
+	// console.log("clicked ->callback()");
+	/*
+	var element = getClickedElement(e);
+	console.log(element);
+	*/
+	
+	var selection = window.getSelection();
+	console.log(selection);
+
+	// document.createRange()
+	// or range = new Range()
+	var range = document.createRange();
+	//range.setStart(selection.anchorNode, selection.anchorOffset);
+	
+	var startOffset = selection.focusOffset,
+		endOffset	= selection.focusOffset + 1;
+	if($(selection.focusNode).text().length < endOffset)
+	{
+		startOffset--;
+		endOffset--;
+	}
+	range.setStart(selection.focusNode, startOffset);
+	range.setEnd(selection.focusNode, endOffset);
+
+	// clicked caret
+	var rect = (range.getClientRects())[0];
+	$("#layer-cursor")
+		.offset({
+			left: rect.x,
+			top: rect.y,
+		})
+		.width(rect.width)
+		.height(rect.height);
+	
+});
+</script>
+
+<div id="area-operation">
+</div>
+<input id="submit" name="submit" type="submit" value="submit">
+<input id="undob" name="undob" type="button" value="undo">
+<input id="redob" name="redob" type="button" value="redo">
+<input id="resetb" name="resetb" type="reset" value="reset">
+<script>
+$( "#undob" ).click(function(){
+	$('#mailbody').history('undo');
+	viewer_sync();
+});
+$( "#redob" ).click(function(){
+	$('#mailbody').history('redo');
+	viewer_sync();
+});
+$( "#resetb" ).click(function(){
+	$("#form-input")[0].reset();
+	$('#mailbody').history('register');
+	viewer_sync();
+});
+</script>
+</form>
+</body>
+</html>
